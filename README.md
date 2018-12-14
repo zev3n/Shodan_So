@@ -24,6 +24,12 @@ optional arguments:
   --list_ip_port        Singled out IP address with port from query results.
 ```
 
-THanks to the legend Hood3dRob1n & Lucifer HR
+Thanks to the legend Hood3dRob1n & Lucifer HR
 
 第一次写工具，喜欢的朋友给个star吧~
+
+## 1.2版本更新说明：
+- 自己用着实在不顺手，修复了几个参数的逻辑bug。
+- 优化了输出的格式，包括颜色和分层，较直观。
+- 增加了按范围查询ip的功能。
+
