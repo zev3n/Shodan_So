@@ -10,14 +10,12 @@ Shodan_So - Search Assistant: Searching shodan via API. --By: Zev3n
 
 
 optional arguments:
-  -search Apache        when searching Shodan for a string.
   -f ips.txt            Using THe Ips List - File containing IPs to search
                         shodan for.
-  -ip 217.140.75.46     Shodan Host Search against IP & return results from
-                        Shodan about a specific IP.
-  -iprg 217.140.75.46/24
-                        Used to return results from Shodan about a specific
-                        CIDR to IP range .
+  --ip 217.140.75.46/24-217.140.75.46/26
+                        Shodan Host Search against IP/IP range & return
+                        results from Shodan about a it/them.
+  --search Apache       when searching Shodan for a string.
   --hostnameonly        Only provide results with a Shodan stored hostname.
   --history             Return all historical banners.
   --page 1              Page number of results to return (default 1 (first

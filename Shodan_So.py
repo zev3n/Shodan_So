@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# coding=utf-8
 # Shodan_So - By Zev3n
 # THanks to the legend Hood3dRob1n & Lucifer HR
 
@@ -28,24 +29,29 @@ class bcolors:
 
 
 import argparse
-from netaddr import IPNetwork
+from netaddr import *
 import os
 import re
 import shodan
 import sys
 import json
+import time
 
 
-def ip_port_list(result, bool):
-    # file = open(path, "rb")
-    # results = json.load(file)
-    # for result in results["matches"]:
+def ip_port_list(result, en_port, en_hostname=False, flag=False):
     ip_str = result["ip_str"]
-    port = result["port"]
-    list = ip_str.encode('unicode-escape').decode('string_escape')
-    if bool:
-        list += ':' + str(port)
-    print(list)
+    lists = ip_str
+    if flag:
+        var_p = "port"
+    else:
+        var_p = "ports"
+    if en_port:
+        port = result[var_p]
+        lists += ':' + str(port)
+    if en_hostname:
+        print("{0:21}\t{1}".format(lists, str(result['hostnames'])))
+    else:
+        print(lists)
 
 
 def cli_parser():
@@ -56,17 +62,14 @@ def cli_parser():
         description="Shodan_So - Search Assistant: Searching shodan via API." +
         bcolors.HEADER + "\n--By: Zev3n \n" + bcolors.ENDC)
     parser.add_argument(
-        "-search", metavar="Apache", default=False,
-        help="\033[0;37mwhen searching Shodan for a string.")
-    parser.add_argument(
         "-f", metavar="ips.txt", default=None,
         help="Using THe Ips List - File containing IPs to search shodan for.")
     parser.add_argument(
-        "-ip", metavar='217.140.75.46', default=False,
-        help="Shodan Host Search against IP & return results from Shodan about a specific IP.")
+        "--ip", metavar='217.140.75.46/24-217.140.75.46/26', default=False,
+        help="Shodan Host Search against IP/IP range & return results from Shodan about a it/them.")
     parser.add_argument(
-        "-iprg", metavar='217.140.75.46/24', default=False,
-        help="Used to return results from Shodan about a specific CIDR to IP range .")
+        "--search", metavar="Apache", default=False,
+        help="when searching Shodan for a string.")
     parser.add_argument(
         "--hostnameonly", action='store_true',
         help="Only provide results with a Shodan stored hostname.")
@@ -91,7 +94,7 @@ def cli_parser():
         parser.print_help()
         sys.exit()
 
-    return args.search, args.ip, args.iprg, args.hostnameonly, args.history, args.page, args.list_ip, args.list_ip_port, args.f
+    return args.search, args.ip, args.hostnameonly, args.history, args.page, args.list_ip, args.list_ip_port, args.f
 
 
 def create_shodan_object():
@@ -103,216 +106,183 @@ def create_shodan_object():
     return shodan_object
 
 
-def host_print(shodan_search_object, ip, search_history, serial_number):
+def host_print(shodan_search_object, ip, search_history, serial_number, list_port, info):
 
     ip = str(ip).replace("\n", "")
-    print "[*] Searching Shodan for info about " + ip + "..."
+    if info is True:
+        print("[*] Searching Shodan for info about " + ip + "...")
 
-    try:
-        # Search Shodan
-        history = search_history
-        host = shodan_search_object.host(ip, history)
-
+    # Search Shodan
+    history = search_history
+    host = shodan_search_object.host(ip, history)
+    if list_port is not False:
+        ip_port_list(host, True)
+    else:
         # Display basic info of result
-        print "\n***** RESULT %s*****" % (serial_number)
-        print """
-IP: %s
-Organization: %s
-Operating System: %s
-        """ % (host['ip_str'], host.get('org', 'n/a'), host.get('os', 'n/a'))
+        print("{}\n***** RESULT {}*****{}".format(bcolors.OKBLUE,
+                                                  serial_number, bcolors.ENDC))
+        print("""
+IP: {}
+ISP: {}
+Country: {}
+Organization: {}
+Operating System: {}""".format(host['ip_str'], host.get('isp', 'n/a'), host.get('country_name', 'n/a'), host.get('org', 'n/a'), host.get('os', 'n/a')))
 
         # Loop through other info
         ports_count = 0
         for item in host['data']:
             ports_count += 1
             sort_list = []
-            print """
-*** PORT %s***
-Port: %s
-Banner:
-%s
+            print("""
+\t{}*** PORT {}***{}
+\tPort: {}
+\tBanner:--↓↓↓↓--
+\t{}
+\t---------↑↑↑↑--""".format(bcolors.OKBLUE, item['timestamp'][:-7] if history is not False else ports_count, bcolors.ENDC, item['port'], item['data'].replace('\n', '\n\t')))
 
-            """ % (ports_count, item['port'], item['data'])
-
-        print "[+] Host " + ip + " Found ports Record:" + str(ports_count)
+        print(
+            "{}[+] No.{} Host {} Found Ports Record: {}".format(bcolors.OKGREEN, serial_number, ip, str(ports_count)))
         for item in host['data']:
             sort_list += [int(item['port'])]
         sort_list = list(set(sort_list))
         sort_list.sort()
+        print("\t", end='')
         for port in sort_list:
-            print port,
-
-    except Exception, e:
-        if str(e).strip() == "API access denied":
-            print "You provided an invalid API Key!"
-            print "Please provide a valid API Key and re-run!"
-            sys.exit()
-        elif str(e).strip() == "No information available for that IP.":
-            print "No information on Shodan about " + str(ip)
-        else:
-            print "[*]Unknown Error: " + str(e)
+            print(port, end=' ')
+        print("\n----------------------\n\n" + bcolors.ENDC)
 
 
-def shodan_iprg_search(shodan_search_object, shodan_search_iprg, input_file_ips, search_history):
+def shodan_ip_search(shodan_search_object, shodan_search_ip, input_file_ips, search_history, list_port):
 
     title()
-
-    serial_number = 0
-    if shodan_search_iprg is not False:
-
-        if not validate_iprg(shodan_search_iprg):
-            print "[*] ERROR: Please provide valid iprg notation!"
-            sys.exit()
-
-        else:
-            print "[*] Searching Shodan for info about " + shodan_search_iprg
-
+    info = False
+    serial_number = 1
+    if shodan_search_ip is not False:
+        if validate_ip(shodan_search_ip) is not False:
+            print("{}[*] Searching Shodan for info about {}{}".format(
+                bcolors.OKWHITE, shodan_search_ip, bcolors.ENDC))
             # Create iprg notated list
-            network = IPNetwork(shodan_search_iprg)
+            network = validate_ip(shodan_search_ip)
+        else:
+            print(
+                "{}[!] ERROR: Please provide valid ip/iprg notation!{}".format(bcolors.FAIL, bcolors.ENDC))
+            sys.exit()
 
     elif input_file_ips is not False:
         try:
             with open(input_file_ips, 'r') as ips_provided:
                 network = ips_provided.readlines()
         except IOError:
-            print "[*] ERROR: You didn't provide a valid input file."
-            print "[*] ERROR: Please re-run and provide a valid file."
+            print("{}[!] ERROR: You didn't provide a valid input file.{}".format(
+                bcolors.FAIL, bcolors.ENDC))
+            print(
+                "{}[!] ERROR: Please re-run and provide a valid file.{}".format(bcolors.FAIL, bcolors.ENDC))
             sys.exit()
 
     # search shodan for each IP
 
-    for ip in network:
-        serial_number += 1
-        host_print(shodan_search_object, ip, search_history, serial_number)
+    for ip in IPSet(network):
+        time.sleep(1.5)
+        try:
+            host_print(shodan_search_object, ip,
+                       search_history, serial_number, list_port, info)
 
-
-def shodan_ip_search(shodan_search_object, shodan_search_ip, search_history):
-
-    title()
-
-    serial_number = ""
-    if validate_ip(shodan_search_ip):
-        host_print(shodan_search_object, shodan_search_ip,
-                   search_history, serial_number)
-    else:
-        print "[*]ERROR: You provided an invalid IP address!"
-        print "[*]ERROR: Please re-run and provide a valid IP."
-        sys.exit()
+        except Exception as e:
+            if str(e).strip() == "Invalid API key":
+                print("{}[!] You provided an invalid API Key!\n[!] Please provide a valid API Key and re-run!{}".format(
+                    bcolors.FAIL, bcolors.ENDC))
+                sys.exit()
+            elif str(e).strip() == "No information available for that IP.":
+                print(
+                    "{}[-]No information on Shodan about {}{}".format(bcolors.WARNING, ip, bcolors.ENDC))
+            else:
+                print("{}[!]Unknown Error: {}{}".format(bcolors.FAIL,
+                                                        str(e), bcolors.ENDC))
+        else:
+            serial_number += 1
 
 
 def shodan_string_search(shodan_search_object, shodan_search_string,
                          hostname_only, page_to_return, list_ip, list_port):
 
     title()
+    print("[*] Searching Shodan...\n")
+    # Time to search Shodan
+    results = shodan_search_object.search(
+        shodan_search_string, page=page_to_return)
 
-    # Try/catch for searching the shodan api
-    print "[*] Searching Shodan...\n"
-    try:
-        # Time to search Shodan
-        results = shodan_search_object.search(
-            shodan_search_string, page=page_to_return)
-
-        print "Total number of results back: " + str(results['total']) + "\n\n"
-        result_count = 100 * (int(page_to_return) - 1)
-        for result in results['matches']:
-            if hostname_only:
-                for item in result['hostnames']:
-                    result_count += 1
-                    if list_ip or list_port:
-                        if list_port:
-                            ip_port_list(result, True)
-                        else:
-                            ip_port_list(result, False)
-                        continue
-
-                    print "*** RESULT %s***" % (result_count)
-                    print "IP Address: " + result['ip_str']
-                    if result['timestamp'] is not None:
-                        print "Last updated: " + result['timestamp']
-                    if result['port'] is not None:
-                        print "Port: " + str(result['port'])
-                    print "Data: " + result['data']
-                    for item in result['hostnames']:
-                        print "Hostname: " + item
-                    print "\n\n"
-
-            else:
+    print("Total number of results back: " +
+          str(results['total']) + "\n\n")
+    result_count = 100 * (int(page_to_return) - 1)
+    for result in results['matches']:
+        if hostname_only:
+            for item in result['hostnames']:
                 result_count += 1
                 if list_ip or list_port:
                     if list_port:
-                        ip_port_list(result, True)
+
+                        ip_port_list(result, True, en_hostname=True, flag=True)
                     else:
-                        ip_port_list(result, False)
+                        ip_port_list(result, False, en_hostname=True)
                     continue
-                print "*** RESULT %s***" % (result_count)
-                print "IP Address: " + result['ip_str']
+
+                print("*** RESULT {0}***".format(result_count))
+                print("IP Address: " + result['ip_str'])
                 if result['timestamp'] is not None:
-                    print "Last updated: " + result['timestamp']
+                    print("Last updated: " + result['timestamp'])
                 if result['port'] is not None:
-                    print "Port: " + str(result['port'])
-                print "Data: " + result['data']
-                print "\n\n"
+                    print("Port: " + str(result['port']))
+                print("Data: " + result['data'])
+                for item in result['hostnames']:
+                    print("Hostname: " + item)
+                print("\n\n")
 
-        # jsObj = json.dumps(results, indent=4)
-        # fileObject = open('jsonFile.json', 'w')
-        # fileObject.write(jsObj)
-        # fileObject.close()
-
-    except Exception, e:
-        if str(e).strip() == "API access denied":
-            print "You provided an invalid API Key!"
-            print "Please provide a valid API Key and re-run!"
         else:
-            print e
-        sys.exit()
-
+            result_count += 1
+            if list_ip or list_port:
+                if list_port:
+                    ip_port_list(result, True, flag=True)
+                else:
+                    ip_port_list(result, False)
+                continue
+            print("*** RESULT %s***" % (result_count))
+            print("IP Address: " + result['ip_str'])
+            if result['timestamp'] is not None:
+                print("Last updated: " + result['timestamp'])
+            if result['port'] is not None:
+                print("Port: " + str(result['port']))
+            print("Data: " + result['data'])
+            print("\n\n")
 
 def title():
     os.system('clear')
-    print "\n" + bcolors.HEADER + \
-          "   ______           __             ____    "
-    print "  / __/ /  ___  ___/ /__ ____     / __/__  "
-    print " _\ \/ _ \/ _ \/ _  / _ `/ _ \   _\ \/ _ \ "
-    print "/___/_//_/\___/\_,_/\_,_/_//_/__/___/\___/ "
-    print "                            /___/          " + bcolors.ENDC
+    print("\n" + bcolors.HEADER +
+          "   ______           __             ____    ")
+    print("  / __/ /  ___  ___/ /__ ____     / __/__  ")
+    print(" _\ \/ _ \/ _ \/ _  / _ `/ _ \   _\ \/ _ \ ")
+    print("/___/_//_/\___/\_,_/\_,_/_//_/__/___/\___/ ")
+    print("                            /___/          " + bcolors.ENDC)
 
-    return
-
-
-def validate_iprg(val_iprg):
-    # This came from (Mult-line link for pep8 compliance)
-    # http://python-iptools.googlecode.com/svn-history/r4
-    # /trunk/iptools/__init__.py
-    iprg_re = re.compile(r'^(\d{1,3}\.){0,3}\d{1,3}/\d{1,2}$')
-    if iprg_re.match(val_iprg):
-        ip, mask = val_iprg.split('/')
-        if validate_ip(ip):
-            if int(mask) > 32:
-                return False
-        else:
-            return False
-        return True
-    return False
-
+    return 0
 
 def validate_ip(val_ip):
-    # This came from (Mult-line link for pep8 compliance)
-    # http://python-iptools.googlecode.com/svn-history/r4
-    # /trunk/iptools/__init__.py
-    ip_re = re.compile(r'^(\d{1,3}\.){0,3}\d{1,3}$')
-    if ip_re.match(val_ip):
-        quads = (int(q) for q in val_ip.split('.'))
-        for q in quads:
-            if q > 255:
-                return False
-        return True
-    return False
 
+    try:
+        if len(val_ip.split('-')) > 2:
+            return False
+        ip_range = IPRange(val_ip.split(
+            '-')[0], val_ip.split('-')[1] if len(val_ip.split('-')) == 2 else val_ip.split('-')[0])
+
+        return ip_range
+    except Exception as e:
+        return False
 
 if __name__ == '__main__':
+    # if os.name == 'nt':      #disable the shell color if system does not support.
+    #     bcolors.disable(bcolors)
 
     # Parse command line options
-    search_string, search_ip, search_iprg, search_hostnameonly,\
+    search_string, search_ip, search_hostnameonly,\
         search_history, search_page_number, list_ip, list_port, search_file = cli_parser()
 
     # Create object used to search Shodan
@@ -323,20 +293,18 @@ if __name__ == '__main__':
         shodan_string_search(shodan_api_object, search_string,
                              search_hostnameonly, search_page_number, list_ip, list_port)
 
-    elif search_ip is not False:
-        shodan_ip_search(shodan_api_object, search_ip, search_history)
+    elif search_ip is not False or search_file is not None:
 
-    elif search_iprg is not False or search_file is not None:
-        shodan_iprg_search(shodan_api_object, search_iprg,
-                           search_file, search_history)
+        shodan_ip_search(shodan_api_object, search_ip,
+                         search_file, search_history, list_port)
 
     else:
-        print "\n" + bcolors.HEADER + \
-              "   ______           __             ____    "
-        print "  / __/ /  ___  ___/ /__ ____     / __/__  "
-        print " _\ \/ _ \/ _ \/ _  / _ `/ _ \   _\ \/ _ \ "
-        print "/___/_//_/\___/\_,_/\_,_/_//_/__/___/\___/ "
-        print "                            /___/          " + bcolors.ENDC
+        print("\n" + bcolors.HEADER +
+              "   ___ __           __             ____    ")
+        print("  / __/ /  ___  ___/ /__  ___     / __/__  ")
+        print(" _\ \/ _ \/ _ \/ _  / _ `/ _ \   _\ \/ _ \ ")
+        print("/___/_//_/\___/\_,_/\_,_/_//_/__/___/\___/ ")
+        print("                            /___/          " + bcolors.ENDC)
         print(bcolors.OKWHITE +
               "\nShodan_So - Search Assistant: Searching shodan via API." + bcolors.ENDC)
 
@@ -345,19 +313,15 @@ if __name__ == '__main__':
         print(bcolors.OKGREEN +
               "Usage: ./ShodanAPI.py [Options]" + bcolors.ENDC)
         print(bcolors.OKGREEN + "Options:           " + bcolors.ENDC)
-        print(bcolors.OKGREEN + "     -f ips.txt" + bcolors.ENDC)
+        print(bcolors.OKGREEN + "   -f ips.txt" + bcolors.ENDC)
         print(bcolors.OKWHITE +
-              "    Shodan search with ipts.txt list  " + bcolors.ENDC)
-        print(bcolors.OKGREEN + "     -search <string>" + bcolors.ENDC)
+              "\tShodan search with ipts.txt list  " + bcolors.ENDC)
+        print(bcolors.OKGREEN + "   --search <string>" + bcolors.ENDC)
         print(bcolors.OKWHITE +
-              "    Use this when searching Shodan for a string. " + bcolors.ENDC)
-        print(bcolors.OKGREEN + "     -ip 217.140.75.46" + bcolors.ENDC)
+              "\tUse this when searching Shodan for a string. " + bcolors.ENDC)
+        print(bcolors.OKGREEN + "   --ip 217.140.75.46" + bcolors.ENDC)
         print(bcolors.OKWHITE +
-              "    Used to return results from Shodan about a specific IP. " + bcolors.ENDC)
-        print(bcolors.OKGREEN + "     -H, -h, -?, --h, -help, --help " + bcolors.ENDC)
-        print(bcolors.OKWHITE + "    For more options " + bcolors.ENDC)
-
-#
-#
-# END ~
-#
+              "\tUsed to return results from Shodan about a IP/IP range. " + bcolors.ENDC)
+        print(bcolors.OKGREEN +
+              "   -H, -h, -?, --h, -help, --help " + bcolors.ENDC)
+        print(bcolors.OKWHITE + "\tFor more options " + bcolors.ENDC)
