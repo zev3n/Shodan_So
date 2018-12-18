@@ -3,7 +3,7 @@ Search Assistant: Searching shodan via API.
 
 ```
 usage: Shodan_So.py [-search Apache] [-f ips.txt] [-ip 217.140.75.46]
-                    [-iprg 217.140.75.46/24] [--hostnameonly] [--history]
+                    [--hostnameonly] [--history]
                     [--page 1] [--list_ip] [--list_ip_port]
 
 Shodan_So - Search Assistant: Searching shodan via API. --By: Zev3n
@@ -12,7 +12,7 @@ Shodan_So - Search Assistant: Searching shodan via API. --By: Zev3n
 optional arguments:
   -f ips.txt            Using THe Ips List - File containing IPs to search
                         shodan for.
-  --ip 217.140.75.46/24-217.140.75.46/26
+  --ip 217.140.75.46-217.140.75.56
                         Shodan Host Search against IP/IP range & return
                         results from Shodan about a it/them.
   --search Apache       when searching Shodan for a string.
