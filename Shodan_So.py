@@ -65,7 +65,7 @@ def cli_parser():
         "-f", metavar="ips.txt", default=None,
         help="Using THe Ips List - File containing IPs to search shodan for.")
     parser.add_argument(
-        "--ip", metavar='217.140.75.46/24-217.140.75.46/26', default=False,
+        "--ip", metavar='217.140.75.46-217.140.75.56', default=False,
         help="Shodan Host Search against IP/IP range & return results from Shodan about a it/them.")
     parser.add_argument(
         "--search", metavar="Apache", default=False,
