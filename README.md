@@ -2,7 +2,7 @@
 Search Assistant: Searching shodan via API.
 
 ```
-usage: Shodan_So.py [-search Apache] [-f ips.txt] [-ip 217.140.75.46]
+usage: Shodan_So.py [-search Apache] [-f ips.txt] [--ip 217.140.75.46]
                     [--hostnameonly] [--history]
                     [--page 1] [--list_ip] [--list_ip_port]
 
